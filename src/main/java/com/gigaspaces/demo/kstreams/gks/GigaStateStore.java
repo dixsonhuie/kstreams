@@ -1,25 +1,30 @@
 package com.gigaspaces.demo.kstreams.gks;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gigaspaces.demo.kstreams.SerdesFactory;
-import java.io.IOException;
+
 import java.rmi.RemoteException;
-import java.util.ArrayList;
+
 import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 
-import com.gigaspaces.document.DocumentProperties;
+import org.openspaces.core.GigaSpace;
+import org.openspaces.core.GigaSpaceConfigurer;
+import org.openspaces.core.space.UrlSpaceConfigurer;
+
 import com.gigaspaces.document.SpaceDocument;
 import com.gigaspaces.metadata.SpaceTypeDescriptor;
 import com.gigaspaces.metadata.SpaceTypeDescriptorBuilder;
 import com.gigaspaces.metadata.index.SpaceIndexType;
+import com.gigaspaces.query.IdQuery;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StateSerdes;
+
 
 /*
 import org.apache.http.HttpHost;
@@ -42,43 +47,39 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 */
 
-import org.openspaces.core.GigaSpace;
-import org.openspaces.core.GigaSpaceConfigurer;
-import org.openspaces.core.space.UrlSpaceConfigurer;
 
 public class GigaStateStore implements StateStore, GigaWritableStore<String, Document> {
 
-  /* In Elasticsearch, an INDEX can be thought as logical area much like a db in a dbms or space in Gigaspaces.
-   */
-  public static final String INDEX = "words";
-  public static final String TYPE_DESCRIPTOR_NAME = INDEX;
+    /* In Elasticsearch, an INDEX can be thought as logical area much like a db in a dbms or space in Gigaspaces.
+     */
 
-  public static String STORE_NAME = "GigaStateStore";
-  private final String hostAddr;
+    public static final String INDEX = "words";
+    public static final String TYPE_DESCRIPTOR_NAME = INDEX;
 
-  private GigaChangeLogger<String,Document> changeLogger = null;
+    public static String STORE_NAME = "GigaStateStore";
 
-  private GigaSpace client;
-  private ProcessorContext context;
-  private long updateTimestamp;
-  private Document value;
-  private String key;
-  private Serde<Document> docSerdes;
+    private final String hostAddr;
 
-  private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper();
+    private GigaChangeLogger<String,Document> changeLogger = null;
+    private GigaSpace client;
+    private ProcessorContext context;
+    private long updateTimestamp;
+    private Document value;
+    private String key;
+    private Serde<Document> docSerdes;
 
-  public GigaStateStore(String hostAddr) {
-    this.hostAddr = hostAddr;
-  }
-
-  @Override // GigaReadableStore
-  public Document read(String key) {
-    Document doc = null;
-
-
-    if (key == null) {
-      return new Document();
+    public GigaStateStore(String hostAddr) {
+        this.hostAddr = hostAddr;
     }
+
+    @Override // GigaReadableStore
+    public Document read(String key) {
+        Document doc = null;
+
+        if (key == null) {
+            return new Document();
+        }
     /*
     GetRequest request = new GetRequest(INDEX, INDEX, key);
     try {
@@ -91,12 +92,23 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
       e.printStackTrace();
     }
 */
+        SpaceDocument spaceDocument = client.readById(new IdQuery<SpaceDocument>(TYPE_DESCRIPTOR_NAME, key));
+        if( spaceDocument != null ) {
+            String docId = spaceDocument.getProperty("docId");
+            Map content = spaceDocument.getProperty("content");
 
-    return doc;
-  }
+            doc = new Document(docId, content);
 
-  @Override // GigaReadableStore
-  public List<Document> search(String words, String... fields) {
+            return doc;
+        }
+        else { // no document found
+            doc = new Document(key, new HashMap<String, Long>());
+            return doc;
+        }
+    }
+
+    @Override // GigaReadableStore
+    public List<Document> search(String words, String... fields) {
     /*
     if (words.length() == 0) {
       return new ArrayList<>();
@@ -125,16 +137,16 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
     return results;
 
      */
-    return null;
-  }
+        return null;
+    }
 
-  @Override // GigaWritableStore
-  public void write(String key, Document value) {
-    this.key = key;
-    this.value = value;
+    @Override // GigaWritableStore
+    public void write(String key, Document value) {
+        this.key = key;
+        this.value = value;
 
 
-
+/*
     String jsonContent;
     try {
       jsonContent = mapper.writeValueAsString(value);
@@ -142,7 +154,7 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
       e.printStackTrace();
       jsonContent = "";
     }
-/*
+
     IndexRequest request = new IndexRequest(INDEX, INDEX, key);
     request.source(jsonContent, XContentType.JSON);
 
@@ -153,7 +165,7 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
       e.printStackTrace();
     }
  */
-
+/*
     HashMap<String,Object> jsonProperties =
             null;
     try {
@@ -166,20 +178,27 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
     } catch (JsonProcessingException e) {
       e.printStackTrace();
     }
+*/
+        Map<String, Object> properties = new HashMap<String, Object>();
+        properties.put("docId", key);
+        properties.put("content", value.content);
 
+        SpaceDocument spaceDocument = new SpaceDocument(TYPE_DESCRIPTOR_NAME, properties);
 
-    this.updateTimestamp = System.currentTimeMillis();
-  }
+        client.write(spaceDocument);
 
-  @Override // StateStore
-  public String name() {
-    return STORE_NAME;
-  }
+        this.updateTimestamp = System.currentTimeMillis();
+    }
 
-  @Override // StateStore
-  public void init(ProcessorContext processorContext, StateStore stateStore) {
+    @Override // StateStore
+    public String name() {
+        return STORE_NAME;
+    }
 
-    context = processorContext;
+    @Override // StateStore
+    public void init(ProcessorContext processorContext, StateStore stateStore) {
+
+        context = processorContext;
 /*
     final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
     credentialsProvider.setCredentials(
@@ -191,38 +210,42 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
         .setHttpClientConfigCallback(httpClientBuilder -> httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider))
     );
 */
-    UrlSpaceConfigurer configurer = new UrlSpaceConfigurer("jini://*/*/" + INDEX);
-    client = new GigaSpaceConfigurer(configurer).gigaSpace();
+        UrlSpaceConfigurer configurer = new UrlSpaceConfigurer("jini://*/*/" + INDEX);
+        client = new GigaSpaceConfigurer(configurer).gigaSpace();
 
-    // register type
-    SpaceTypeDescriptor typeDescriptor = new SpaceTypeDescriptorBuilder(TYPE_DESCRIPTOR_NAME)
-            .idProperty("docId", true)
-            .addFixedProperty("content", DocumentProperties.class)
-            .addPropertyIndex("content", SpaceIndexType.EQUAL)
-            .create();
-    // Register type:
-    client.getTypeManager().registerTypeDescriptor(typeDescriptor);
+        HashMap<String,Long> map = new HashMap<>();
+        // register type
+        SpaceTypeDescriptor typeDescriptor = new SpaceTypeDescriptorBuilder(TYPE_DESCRIPTOR_NAME)
+                .idProperty("docId", false, SpaceIndexType.EQUAL)
+                .addFixedProperty("content", map.getClass())
+                .addPropertyIndex("content", SpaceIndexType.EQUAL)
+                .create();
 
-    docSerdes = SerdesFactory.from(Document.class);
+        client.getTypeManager().registerTypeDescriptor(typeDescriptor);
 
-    StateSerdes<String,Document> serdes = new StateSerdes(
-        name(),
-        Serdes.String(),
-        docSerdes);
+        docSerdes = SerdesFactory.from(Document.class);
 
-    changeLogger = new GigaChangeLogger<>(name(), context, serdes);
+        StateSerdes<String,Document> serdes = new StateSerdes(
+                name(),
+                Serdes.String(),
+                docSerdes);
 
-    context.register(this, (key, value) -> {
-      // here the store restore should happen from the changelog topic.
+        changeLogger = new GigaChangeLogger<>(name(), context, serdes);
+
+        context.register(this, (key, value) -> {
+            // here the store restore should happen from the changelog topic.
+      /*
+      // commented because another write is in the transform() method
       String sKey = new String(key);
       Document docValue = docSerdes.deserializer().deserialize(sKey, value);
       write(sKey, docValue);
-    });
 
-  }
+       */
+        });
+    }
 
-  @Override //StateStore
-  public void flush() {
+    @Override //StateStore
+    public void flush() {
     /*
       Definition of a flush, for which there is no GigaSpace equivalent
        - Flush essentially means that all the documents in the in-memory buffer are written to new Lucene segments,
@@ -237,11 +260,11 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
       e.printStackTrace();
     }
     */
-    changeLogger.logChange(key, value, updateTimestamp);
-  }
+        changeLogger.logChange(key, value, updateTimestamp);
+    }
 
-  @Override // StateStore
-  public void close() {
+    @Override // StateStore
+    public void close() {
     /*
       We don't have a GigaSpace.close equivalent, unless we use internal API
     try {
@@ -251,15 +274,15 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
     }
 
     */
-  }
+    }
 
-  @Override //StateStore
-  public boolean persistent() {
-    return true;
-  }
+    @Override //StateStore
+    public boolean persistent() {
+        return true;
+    }
 
-  @Override //StateStore
-  public boolean isOpen() {
+    @Override //StateStore
+    public boolean isOpen() {
     /*
     try {
       return client.ping(RequestOptions.DEFAULT);
@@ -269,13 +292,13 @@ public class GigaStateStore implements StateStore, GigaWritableStore<String, Doc
     }
 
      */
-    try {
-      client.getSpace().ping();
-      return true;
-    } catch (RemoteException e) {
-      e.printStackTrace();
+        try {
+            client.getSpace().ping();
+            return true;
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+        return false;
     }
-    return false;
-  }
 
 }

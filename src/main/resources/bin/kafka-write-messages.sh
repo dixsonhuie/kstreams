@@ -6,5 +6,13 @@ if [ -z "$KAFKA_HOME" ]; then
 fi
 
 # this command expects input to be entered from the command line. Use ctrl-d to exit.
-# [2020-01-24 16:13:42,369] WARN [Producer clientId=console-producer] Error while fetching metadata with correlation id 3 : {messages=LEADER_NOT_AVAILABLE} (org.apache.kafka.clients.NetworkClient)
-$KAFKA_HOME/bin/kafka-console-producer.sh --broker-list localhost:9092 --topic source-topic
+# example data for a session:
+# key1:kafka message number 1
+# key2:1 2 3 3 4 5
+# key3:hello world
+# key1:repeat again
+
+$KAFKA_HOME/bin/kafka-console-producer.sh --broker-list localhost:9092 \
+--topic source-topic \
+--property "parse.key=true" \
+--property "key.separator=:"
