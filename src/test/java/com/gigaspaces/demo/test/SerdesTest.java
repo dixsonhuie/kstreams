@@ -29,6 +29,8 @@ import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.testcontainers.elasticsearch.ElasticsearchContainer;
 */
 
+import com.gigaspaces.document.DocumentProperties;
+import com.gigaspaces.document.SpaceDocument;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -92,7 +94,38 @@ public class SerdesTest {
     }
 
     @Test
-    public void testStoreSearch() {
+    public void testSerDer2() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        DocumentProperties properties = new DocumentProperties()
+                .setProperty("docId", "1")
+                .setProperty("content", new DocumentProperties()
+                        .setProperty("Manufacturer", "Acme")
+                        .setProperty("RequiresAssembly", true)
+                        .setProperty("NumberOfParts", 42));
+
+        SpaceDocument spaceDocument = new SpaceDocument("Product", properties);
+
+        try {
+            String jsonFromGrid = new ObjectMapper().writeValueAsString(spaceDocument);
+            System.out.println("jsonFromGrid is: " + jsonFromGrid);
+
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        String docId = spaceDocument.getProperty("docId");
+        Map content = spaceDocument.getProperty("content");
+
+        Document value = new Document(docId, content);
+        String jsonContent = null;
+        try {
+            jsonContent = mapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+            jsonContent = "";
+        }
+        System.out.println("jsonContent is: " + jsonContent);
+
     }
 
 }

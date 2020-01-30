@@ -7,11 +7,13 @@ public class Document<K,V> {
 
 
   public String docId;
+
+  // below not used
   //public Map<String, String> headers;
   public Map<K,V> content;
 
   public Document() {
-    this(null, new HashMap<>());
+    this("", new HashMap<>());
   }
   public Document(String docId, Map<K,V> content) {
     this.content = content;
