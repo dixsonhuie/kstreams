@@ -5,4 +5,11 @@ if [ -z "$KAFKA_HOME" ]; then
     exit 1
 fi
 
-$KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic source-topic --from-beginning
+## only shows values
+## $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic source-topic --from-beginning
+
+
+## show keys
+   $KAFKA_HOME/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic source-topic --from-beginning \
+   --property "print.key=true" \
+   --property "key.separator=:"
